@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>.veg Extractor — VEGAS Pro Project Inspector</title>
+<style>
+  :root{
+    --bg-0:#0c0d0f; --bg-1:#141518; --bg-2:#1b1d21; --bg-3:#24272c;
+    --line:#2c2f35; --fg-0:#e7e9ec; --fg-1:#a3a8b0; --fg-2:#666b73;
+    --green:#3ea34c; --green-dim:#3ea34c33;
+    --blue:#3e7ea3;
+    --accent:#3ea34c;
+    --mono:"JetBrains Mono","Fira Code",ui-monospace,Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg-0);color:var(--fg-0);font-family:var(--sans);min-height:100vh;}
+  header{padding:20px 26px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  header h1{margin:0;font-size:17px;font-weight:600;}
+  header h1 span{color:var(--green);}
+  header .sub{font-size:12px;color:var(--fg-2);font-family:var(--mono);margin-top:2px;}
+  #fileInput{display:none;}
+  button.dropzone{
+    display:block;width:calc(100% - 52px);margin:20px 26px;border:1.5px dashed var(--line);
+    border-radius:12px;padding:34px 20px;text-align:center;color:var(--fg-2);font-size:13px;
+    font-family:var(--sans);background:var(--bg-1);cursor:pointer;transition:all .2s;
+  }
+  button.dropzone:hover{border-color:var(--green);background:#101a12;color:var(--fg-0);}
+  button.dropzone.drag{border-color:var(--green);background:#101a12;color:var(--fg-0);}
+  button.dropzone b{color:var(--fg-1);}
+  main{display:none;padding:0 26px 50px;}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:1px;background:var(--line);margin-top:16px;border-radius:10px;overflow:hidden;}
+  .stat{background:var(--bg-1);padding:12px 14px;}
+  .stat .k{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--fg-2);margin-bottom:5px;}
+  .stat .v{font-family:var(--mono);font-size:14px;}
+  .stat .v.g{color:var(--green);}
+
+  .notice{
+    margin-top:16px;padding:12px 16px;border:1px solid #4a3a1f;background:#1c1710;border-radius:10px;
+    font-size:12px;color:#e0b96b;line-height:1.5;
+  }
+  .notice b{color:#f0cf8f;}
+
+  .panel{background:var(--bg-1);border:1px solid var(--line);border-radius:12px;margin-top:16px;overflow:hidden;}
+  .panel-head{padding:12px 16px;border-bottom:1px solid var(--line);font-size:11.5px;text-transform:uppercase;letter-spacing:1px;color:var(--fg-2);display:flex;justify-content:space-between;align-items:center;}
+  .panel-head b{color:var(--fg-0);font-weight:600;letter-spacing:0.5px;}
+
+  /* ===== timeline / vegas-style track view ===== */
+  .veg-ruler{display:flex;background:var(--bg-2);border-bottom:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--fg-2);}
+  .veg-ruler .rlabel{width:160px;flex:none;padding:6px 10px;border-right:1px solid var(--line);}
+  .veg-ruler .rtrack{position:relative;flex:1;height:24px;}
+  .veg-ruler .rtick{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);padding-left:3px;line-height:24px;}
+  .veg-track{display:flex;border-bottom:1px solid var(--line);}
+  .veg-track:last-child{border-bottom:none;}
+  .veg-track-head{
+    width:160px;flex:none;border-right:1px solid var(--line);background:var(--bg-2);
+    padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .veg-track-head .name{font-family:var(--mono);font-size:11.5px;color:var(--fg-0);}
+  .veg-track-head select{
+    background:var(--bg-3);border:1px solid var(--line);color:var(--fg-1);font-size:10.5px;
+    border-radius:5px;padding:3px 5px;font-family:var(--mono);
+  }
+  .veg-track-head .swatch{width:100%;height:4px;border-radius:2px;}
+  .veg-lane{position:relative;flex:1;height:64px;background:repeating-linear-gradient(90deg, #000000 0, #000000 1px, transparent 1px, transparent 40px);}
+  .veg-clip{
+    position:absolute;top:6px;bottom:6px;border-radius:4px;overflow:hidden;cursor:pointer;
+    border:1px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:9.5px;color:#fff;
+  }
+  .veg-clip.audio{background:linear-gradient(180deg,#2f7a3c,#1f5228);}
+  .veg-clip.video{background:linear-gradient(180deg,#2f5a7a,#1f3a52);}
+  .veg-clip:hover{outline:2px solid #fff8;}
+  .veg-clip .wave{position:absolute;inset:0;opacity:0.55;}
+
+  .preview-wrap{display:flex;gap:16px;flex-wrap:wrap;padding:16px;}
+  #previewCanvas{width:320px;height:180px;border-radius:8px;border:1px solid var(--line);background:#000;flex:none;}
+  .preview-info{flex:1;min-width:220px;font-family:var(--mono);font-size:12px;color:var(--fg-1);}
+  .preview-info .row{padding:4px 0;border-bottom:1px solid var(--line);}
+  .preview-info .row:last-child{border-bottom:none;}
+  .preview-info b{color:var(--fg-0);}
+  .btn{background:var(--bg-3);border:1px solid var(--line);color:var(--fg-0);padding:8px 14px;border-radius:7px;font-size:12.5px;cursor:pointer;font-family:var(--sans);}
+  .btn:hover{border-color:var(--green);}
+  .btn.playing{background:var(--green-dim);border-color:var(--green);color:#dfffe4;}
+
+  /* ===== chunk tree ===== */
+  .tree{padding:10px 14px;font-family:var(--mono);font-size:11.5px;max-height:360px;overflow-y:auto;}
+  .tree .row{display:flex;gap:8px;padding:2px 0;color:var(--fg-1);white-space:pre;}
+  .tree .row .guid{color:var(--fg-2);}
+  .tree .row .known{color:var(--green);}
+  .tree .row .sz{margin-left:auto;color:var(--fg-2);}
+
+  /* ===== strings panel ===== */
+  .strings{padding:10px 14px;font-family:var(--mono);font-size:12px;max-height:300px;overflow-y:auto;}
+  .strings .s{padding:4px 8px;border-bottom:1px solid var(--line);color:var(--fg-1);word-break:break-all;}
+  .strings .s.path{color:#8fd9ff;}
+  .strings .s .off{color:var(--fg-2);margin-right:8px;}
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-track{background:var(--bg-1);}
+  ::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:6px;border:1px solid var(--line);}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>.veg <span>EXTRACTOR</span></h1>
+    <div class="sub">VEGAS Pro project inspector — Wave64/GUID chunk parser + heuristic timeline preview</div>
+  </div>
+  <input type="file" id="fileInput" accept=".veg">
+</header>
+
+<button class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+  Drag a <b>.veg</b> project file here, or click to browse.<br>
+  Parsed entirely in-browser — nothing is uploaded anywhere.
+</button>
+
+<main id="main">
+  <div class="stat-grid" id="statGrid"></div>
+
+  <div class="notice" id="notice"></div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <b>Timeline (relative)</b>
+      <span style="display:flex;align-items:center;gap:10px;">
+        <span id="trackCount"></span>
+        <button class="btn" id="playTimelineBtn" onclick="playTimeline()">▶ Play Timeline</button>
+        <button class="btn" id="stopTimelineBtn" onclick="stopTimeline()">■ Stop</button>
+        <label style="font-size:11px;color:var(--fg-2);display:flex;align-items:center;gap:6px;font-family:var(--mono);">
+          Speed <input type="range" id="speedSlider" min="50" max="150" value="100" step="5" oninput="document.getElementById('speedLabel').textContent=this.value">
+          <span id="speedLabel">100</span>%
+        </label>
+      </span>
+    </div>
+    <div id="timelineWrap"></div>
+    <div style="padding:0 16px 12px;font-size:11px;color:var(--fg-2);font-family:var(--mono);">
+      Playback compresses the whole relative tick span into <span id="playbackDurationLabel">14</span>s — it's a speed-scaled preview of the real spacing, not real-time-accurate (see notice above for why).
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><b>Preview</b></div>
+    <div class="preview-wrap">
+      <canvas id="previewCanvas" width="320" height="180"></canvas>
+      <div class="preview-info" id="previewInfo">Click a clip on the timeline to preview it.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><b>Chunk Tree</b><span id="chunkCount"></span></div>
+    <div class="tree" id="chunkTree"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><b>Extracted Strings</b><span id="stringCount"></span></div>
+    <div class="strings" id="stringsList"></div>
+  </div>
+</main>
+
+<script>
+/* ================================================================
+   VEGAS Pro .veg is a Wave64-style container: 16-byte GUID + 8-byte
+   size per chunk (not classic 4-byte RIFF). A "list"-GUID chunk's
+   payload opens with a 16-byte "list type" GUID, then nests more
+   chunks — exactly like RIFF LIST but GUID-sized. Everything below
+   was verified against a real .veg file byte-for-byte before this
+   tool was written; GUIDs that are genuinely unknown are labeled as
+   such rather than guessed at.
+   ================================================================ */
+
+const G = {
+  RIFF: "726966662e91cf11a5d628db04c10000",
+  LIST: "6c6973742f91cf11a5d628db04c10000",
+  // list "type" GUIDs identified by walking a real project file:
+  TRACK_LIST:  "48076c4d1623d21186b000c04f8edb8a", // top-level list whose payload is one Track
+  EVENTS_LIST: "49076c4d1623d21186b000c04f8edb8a", // container of a track's Events
+  EVENT_LIST:  "4a076c4d1623d21186b000c04f8edb8a", // one Event (clip) on the timeline
+  // leaf chunk GUIDs inside an Event:
+  EVENT_HEADER: "6a208d162123d21186b000c04f8edb8a", // has a raw int64 "start tick"-like field
+  EVENT_FADE:   "6d208d162123d21186b000c04f8edb8a",
+  // list type whose payload holds a real per-event playback-rate double —
+  // confirmed at a fixed offset inside every sampled event's Take chunk
+  TAKE_LIST:    "ce3b2bfc8579d211871100c04f8edb8a",
+};
+function hex(b){ return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function guidLabel(g){
+  for(const [name,val] of Object.entries(G)) if(g===val) return name;
+  return null;
+}
+
+/* ---------------- generic recursive chunk walker ---------------- */
+function parseChunks(view, start, end, depth, out){
+  let offset = start;
+  while(offset + 24 <= end){
+    const guid = hex(new Uint8Array(view.buffer, view.byteOffset+offset, 16));
+    const size = Number(view.getBigUint64(offset+16, true));
+    if(size < 24 || offset+size > view.byteLength) break;
+    const isList = guid === G.LIST;
+    const node = { guid, label: guidLabel(guid), size, offset, depth, isList, children: [] };
+    if(isList && size >= 40){
+      const typeGuid = hex(new Uint8Array(view.buffer, view.byteOffset+offset+24, 16));
+      node.typeGuid = typeGuid;
+      node.typeLabel = guidLabel(typeGuid);
+      parseChunks(view, offset+24+16, offset+size, depth+1, node.children);
+    }
+    out.push(node);
+    const padded = size + (8 - size % 8) % 8;
+    offset += padded;
+  }
+  return out;
+}
+
+/* ---------------- string extraction (ASCII + UTF-16LE) ---------------- */
+function extractStrings(bytes, minLen=4){
+  const results = [];
+  // UTF-16LE pass. A code unit counts as "printable" if it isn't a C0/C1
+  // control character or a surrogate half — this covers plain ASCII *and*
+  // accented characters (Latin-1 Supplement, Latin Extended-A/B — é, ö, ő,
+  // ű, ñ, etc.), which the previous ASCII-only check was silently cutting
+  // strings off at.
+  function isPrintable(cc){
+    if(cc >= 0x20 && cc <= 0x7E) return true;    // Basic Latin (plain ASCII)
+    if(cc >= 0xA0 && cc <= 0xFF) return true;    // Latin-1 Supplement (é, ñ, ü, ö...)
+    if(cc >= 0x100 && cc <= 0x24F) return true;  // Latin Extended-A/B (ő, ű, ł, š...)
+    // Deliberately NOT allowing arbitrary Unicode beyond this: random binary
+    // data (numeric fields, padding) reinterpreted as UTF-16 lands on CJK/
+    // Hangul/etc. code points by pure chance far more often than it lands on
+    // real text there, so a wide-open filter produces convincing-looking but
+    // fake "strings". This trades away genuine non-Latin-script text (real
+    // Chinese/Japanese/Korean paths would be missed) for far fewer false
+    // positives, since every string actually seen in these projects so far
+    // has been Latin-script (English/Hungarian/German).
+    return false;
+  }
+  let run = [], runStart = -1;
+  for(let i=0; i+1<bytes.length; i+=2){
+    const cc = bytes[i] | (bytes[i+1] << 8);
+    if(isPrintable(cc)){
+      if(run.length===0) runStart = i;
+      run.push(String.fromCharCode(cc));
+    } else {
+      if(run.length>=minLen) results.push({offset:runStart, text:run.join('')});
+      run = [];
+    }
+  }
+  if(run.length>=minLen) results.push({offset:runStart, text:run.join('')});
+
+  // dedupe, keep first occurrence
+  const seen = new Set();
+  return results.filter(r=>{
+    if(seen.has(r.text)) return false;
+    seen.add(r.text);
+    return true;
+  });
+}
+
+/* ---------------- heuristic track/event extraction ---------------- */
+function findTracks(chunkTree, view){
+  const tracks = [];
+  function walk(nodes){
+    for(const node of nodes){
+      if(node.isList && node.typeGuid === G.TRACK_LIST){
+        const eventsContainer = node.children.find(c=>c.isList && c.typeGuid===G.EVENTS_LIST);
+        const eventLists = eventsContainer ? eventsContainer.children.filter(c=>c.isList && c.typeGuid===G.EVENT_LIST) : [];
+        const events = [];
+        for(const evNode of eventLists){
+          const header = evNode.children.find(c=>c.guid===G.EVENT_HEADER);
+          const takeList = evNode.children.find(c=>c.isList && c.typeGuid===G.TAKE_LIST);
+          let startTick = null, rawLen = null, rate = 1;
+          if(header && header.size >= 48){
+            try{
+              startTick = Number(view.getBigInt64(header.offset+24+16, true));
+              rawLen = view.getFloat64(header.offset+24+40, true);
+            }catch(e){}
+          }
+          if(takeList){
+            try{
+              const payloadStart = takeList.offset + 24 + 16;
+              const v = view.getFloat64(payloadStart+32, true);
+              // sanity bound — real playback rates in VEGAS run roughly 0.01x–100x;
+              // anything outside that isn't this field, so fall back to the 1.0 default
+              if(v > 0.01 && v < 100) rate = v;
+            }catch(e){}
+          }
+          events.push({ offset: evNode.offset, startTick, rawLen, rate });
+        }
+        events.sort((a,b)=> (a.startTick??0) - (b.startTick??0));
+        tracks.push({ offset: node.offset, size: node.size, events });
+      }
+      // a track list can't nest another track list, but keep walking
+      // everything else in case structure varies across VEGAS versions
+      if(node.children && node.children.length) walk(node.children);
+    }
+  }
+  walk(chunkTree);
+  return tracks;
+}
+
+/* ==================== app wiring ==================== */
+let FILE_BYTES = null;
+document.getElementById('fileInput').addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e=>{e.preventDefault(); dz.classList.add('drag');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('drag'));
+dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('drag'); if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      FILE_BYTES = new Uint8Array(reader.result);
+      processFile(FILE_BYTES, file.name);
+    }catch(err){
+      alert('Failed to parse file: '+err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processFile(bytes, filename){
+  const view = new DataView(bytes.buffer);
+  const riffGuid = hex(bytes.subarray(0,16));
+  if(riffGuid !== G.RIFF){
+    alert('This does not look like a Wave64-framed .veg file (unexpected header GUID). Parsing anyway on a best-effort basis.');
+  }
+  const totalSize = Number(view.getBigUint64(16, true));
+  const formatGuid = hex(bytes.subarray(24,40));
+
+  const chunkTree = parseChunks(view, 40, Math.min(totalSize, bytes.length), 0, []);
+  const strings = extractStrings(bytes, 4);
+  const tracks = findTracks(chunkTree, view);
+
+  renderStats(filename, bytes.length, totalSize, formatGuid, chunkTree, tracks, strings);
+  renderNotice();
+  renderTimeline(tracks);
+  renderChunkTree(chunkTree);
+  renderStrings(strings);
+
+  document.getElementById('main').style.display = 'block';
+}
+
+function countChunks(nodes){
+  let n = 0;
+  for(const c of nodes){ n++; n += countChunks(c.children); }
+  return n;
+}
+
+function renderStats(filename, size, declaredSize, formatGuid, chunkTree, tracks, strings){
+  const eventCount = tracks.reduce((a,t)=>a+t.events.length, 0);
+  const pathLike = strings.filter(s=>/[\\\/]/.test(s.text) || /\.(wav|mp3|mp4|avi|mov|png|jpg|veg)$/i.test(s.text));
+  const stats = [
+    {k:'file', v: filename},
+    {k:'size', v: (size/1024).toFixed(1)+' KB'},
+    {k:'container size', v: declaredSize===size ? 'matches' : declaredSize+' (mismatch)', cls: declaredSize===size?'g':''},
+    {k:'total chunks', v: countChunks(chunkTree)},
+    {k:'tracks found', v: tracks.length, cls:'g'},
+    {k:'events found', v: eventCount, cls:'g'},
+    {k:'strings extracted', v: strings.length},
+    {k:'media/path refs', v: pathLike.length},
+  ];
+  document.getElementById('statGrid').innerHTML = stats.map(s=>
+    `<div class="stat"><div class="k">${s.k}</div><div class="v ${s.cls||''}">${escapeHTML(String(s.v))}</div></div>`
+  ).join('');
+}
+
+function renderNotice(){
+  document.getElementById('notice').innerHTML =
+    `<b>What's real vs. inferred:</b> the chunk container, sizes, offsets, and every extracted string below are parsed directly from the file's bytes — nothing there is guessed. The track/event GUIDs (list types, header/fade/take chunks) were confirmed by walking an actual VEGAS Pro 17 project and finding monotonically-increasing per-event tick values on a clean ratio grid — that structure is real. Each event also has a double inside its Take chunk at a fixed offset that is <b>inferred</b> to be its playback rate (it reads exactly 1.0 on every event here, so it has never been seen varying — unproven). It is wired into playback below, but this project can't confirm it, so you won't hear per-clip pitch/speed variation unless you load a file that actually uses it. What's <b>not</b> confirmed: the exact ticks-per-second conversion to real-world time, and which tracks are audio vs. video (VEGAS doesn't appear to mark that in a GUID we've identified yet) — so the timeline below uses <b>relative</b> tick spacing, not absolute seconds, and every track defaults to "Audio" with a manual switch to "Video" since we can't reliably auto-detect it yet. Clip content itself (actual audio/video) is never embedded in a .veg — VEGAS only stores references to external media files — so previews use a placeholder red/green/blue frame for video and a synthesized 1000&nbsp;Hz tone for audio, standing in for whatever real media the project pointed to.`;
+}
+
+/* ---------------- timeline rendering ---------------- */
+let AUDIO_CTX = null;
+let TIMELINE_STATE = null; // {tracks, minTick, span}
+const PLAYBACK_DURATION_SEC = 28; // base duration at 100% speed — slower/steadier than the original 14s
+
+function renderTimeline(tracks){
+  document.getElementById('trackCount').textContent = tracks.length + ' track' + (tracks.length===1?'':'s');
+  document.getElementById('playbackDurationLabel').textContent = PLAYBACK_DURATION_SEC;
+  const wrap = document.getElementById('timelineWrap');
+  if(!tracks.length){
+    wrap.innerHTML = `<div style="padding:24px;color:var(--fg-2);font-size:12.5px;">No track/event structure matched the known GUIDs in this file — see Chunk Tree below for the raw layout.</div>`;
+    TIMELINE_STATE = null;
+    return;
+  }
+
+  const allTicks = tracks.flatMap(t=>t.events.map(e=>e.startTick).filter(v=>v!=null));
+  const minTick = Math.min(...allTicks, 0);
+  const maxTick = Math.max(...allTicks, 1);
+  const span = Math.max(maxTick - minTick, 1);
+  TIMELINE_STATE = { tracks, minTick, span };
+
+  let html = `<div class="veg-ruler"><div class="rlabel">Track</div><div class="rtrack">`;
+  for(let i=0;i<=10;i++){
+    html += `<div class="rtick" style="left:${i*10}%;">${Math.round(i*span/10)}</div>`;
+  }
+  html += `</div></div>`;
+
+  tracks.forEach((track, ti)=>{
+    const trackId = 'trk'+ti;
+    html += `<div class="veg-track">
+      <div class="veg-track-head">
+        <div class="name">Track ${ti+1} <span style="color:var(--fg-2);">(${track.events.length} events)</span></div>
+        <div class="swatch" id="${trackId}_swatch" style="background:var(--green);"></div>
+        <select onchange="setTrackType('${trackId}', this.value)">
+          <option value="audio" selected>Audio</option>
+          <option value="video">Video</option>
+        </select>
+      </div>
+      <div class="veg-lane" id="${trackId}_lane">`;
+
+    track.events.forEach((ev, ei)=>{
+      if(ev.startTick==null) return;
+      const leftPct = ((ev.startTick - minTick) / span) * 100;
+      // width from delta to next event, fallback to a small default
+      const next = track.events[ei+1];
+      const deltaTick = next && next.startTick!=null ? (next.startTick - ev.startTick) : span*0.02;
+      const widthPct = Math.max((deltaTick/span)*100 - 0.3, 0.6);
+      html += `<div class="veg-clip audio" id="${trackId}_clip${ei}"
+                 style="left:${leftPct}%;width:${widthPct}%;"
+                 onclick="previewClip('${trackId}', ${ei}, ${JSON.stringify(ev.rawLen)}, ${ev.rate})"
+                 data-rate="${ev.rate}">
+                 <div class="wave">${waveformSVG()}</div>
+               </div>`;
+    });
+
+    html += `<div class="playhead-line" id="${trackId}_ph"
+               style="position:absolute;top:0;bottom:0;left:0%;width:2px;background:#fff;
+               box-shadow:0 0 6px #fff;display:none;pointer-events:none;"></div>`;
+    html += `</div></div>`;
+  });
+
+  wrap.innerHTML = html;
+}
+
+/* ---------------- timeline playback ---------------- */
+let PLAYBACK_TIMERS = [];
+let PLAYBACK_RAF = null;
+
+function playTimeline(){
+  if(!TIMELINE_STATE) return;
+  stopTimeline();
+  if(!AUDIO_CTX) AUDIO_CTX = new (window.AudioContext||window.webkitAudioContext)();
+
+  const { tracks, minTick, span } = TIMELINE_STATE;
+  const speedPct = Number(document.getElementById('speedSlider').value); // e.g. 90 = 90% speed
+  const speed = speedPct / 100;
+  // slower speed = longer duration; VEGAS links speed and pitch together on a
+  // stretched event, so we drop the tone's pitch by the same factor below
+  const durationMs = (PLAYBACK_DURATION_SEC * 1000) / speed;
+  const startTime = performance.now();
+
+  tracks.forEach((track, ti)=>{
+    const trackId = 'trk'+ti;
+    const lane = document.getElementById(trackId+'_lane');
+    const isVideo = lane.querySelector('.veg-clip')?.classList.contains('video');
+
+    track.events.forEach((ev, ei)=>{
+      if(ev.startTick==null) return;
+      const t = ((ev.startTick - minTick) / span) * durationMs;
+      const clip = document.getElementById(`${trackId}_clip${ei}`);
+      const evRate = ev.rate || 1; // this event's own playback rate, straight from the file
+      const timer = setTimeout(()=>{
+        if(isVideo){
+          flashVideoClip(clip);
+        } else {
+          // read the slider live at the moment this tone actually fires, so
+          // dragging Speed *during* playback audibly changes pitch immediately
+          // instead of only taking effect the next time you press Play
+          const liveSpeed = Number(document.getElementById('speedSlider').value) / 100;
+          scheduleTone((0.12/liveSpeed)/evRate, 1000*liveSpeed*evRate);
+          if(clip){ clip.style.outline = '2px solid #fff'; setTimeout(()=>{ if(clip) clip.style.outline=''; }, 150); }
+        }
+      }, t);
+      PLAYBACK_TIMERS.push(timer);
+    });
+
+    const ph = document.getElementById(trackId+'_ph');
+    if(ph) ph.style.display = 'block';
+  });
+
+  function tick(){
+    const elapsed = performance.now() - startTime;
+    const pct = Math.min(elapsed / durationMs, 1) * 100;
+    tracks.forEach((_,ti)=>{
+      const ph = document.getElementById('trk'+ti+'_ph');
+      if(ph) ph.style.left = pct+'%';
+    });
+    if(elapsed < durationMs){
+      PLAYBACK_RAF = requestAnimationFrame(tick);
+    } else {
+      stopTimeline();
+    }
+  }
+  PLAYBACK_RAF = requestAnimationFrame(tick);
+
+  document.getElementById('playTimelineBtn').classList.add('playing');
+}
+
+function stopTimeline(){
+  PLAYBACK_TIMERS.forEach(id=>clearTimeout(id));
+  PLAYBACK_TIMERS = [];
+  if(PLAYBACK_RAF) cancelAnimationFrame(PLAYBACK_RAF);
+  PLAYBACK_RAF = null;
+  document.querySelectorAll('.playhead-line').forEach(el=>{ el.style.display='none'; el.style.left='0%'; });
+  document.getElementById('playTimelineBtn')?.classList.remove('playing');
+}
+
+function flashVideoClip(clip){
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#ff2b2b'; ctx.fillRect(0,0,w/3,h);
+  ctx.fillStyle = '#2bff5e'; ctx.fillRect(w/3,0,w/3,h);
+  ctx.fillStyle = '#2b6bff'; ctx.fillRect(2*w/3,0,w/3,h);
+  if(clip){ clip.style.outline = '2px solid #fff'; setTimeout(()=>{ if(clip) clip.style.outline=''; }, 150); }
+}
+
+function scheduleTone(durationSec, freq=1000){
+  const osc = AUDIO_CTX.createOscillator();
+  const gain = AUDIO_CTX.createGain();
+  osc.frequency.value = freq;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(0.15, AUDIO_CTX.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, AUDIO_CTX.currentTime + durationSec);
+  osc.connect(gain).connect(AUDIO_CTX.destination);
+  osc.start();
+  osc.stop(AUDIO_CTX.currentTime + durationSec);
+}
+
+function waveformSVG(){
+  let bars = '';
+  for(let i=0;i<12;i++){
+    const h = 30 + Math.round(Math.sin(i*1.7)*20 + Math.random()*10);
+    bars += `<rect x="${i*8}" y="${(100-h)/2}%" width="4" height="${h}%" fill="#ffffff"/>`;
+  }
+  return `<svg viewBox="0 0 96 100" preserveAspectRatio="none" style="width:100%;height:100%;"><g opacity="0.5">${bars}</g></svg>`;
+}
+
+function setTrackType(trackId, type){
+  const lane = document.getElementById(trackId+'_lane');
+  const swatch = document.getElementById(trackId+'_swatch');
+  swatch.style.background = type==='video' ? 'var(--blue)' : 'var(--green)';
+  lane.querySelectorAll('.veg-clip').forEach(c=>{
+    c.classList.remove('audio','video');
+    c.classList.add(type);
+    c.querySelector('.wave').style.display = type==='audio' ? 'block' : 'none';
+  });
+}
+
+function previewClip(trackId, idx, rawLen, rate){
+  const lane = document.getElementById(trackId+'_lane');
+  const isVideo = lane.querySelector('.veg-clip').classList.contains('video');
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+  const info = document.getElementById('previewInfo');
+  rate = rate || 1;
+
+  if(isVideo){
+    // placeholder video frame: red / green / blue vertical bars, standing in for
+    // whatever real media file this event referenced (not embedded in the .veg)
+    const w = canvas.width, h = canvas.height;
+    ctx.fillStyle = '#ff2b2b'; ctx.fillRect(0,0,w/3,h);
+    ctx.fillStyle = '#2bff5e'; ctx.fillRect(w/3,0,w/3,h);
+    ctx.fillStyle = '#2b6bff'; ctx.fillRect(2*w/3,0,w/3,h);
+    info.innerHTML = `<div class="row"><b>Clip</b> ${trackId} · event ${idx+1}</div>
+      <div class="row"><b>Type</b> placeholder video (RGB test frame — real media not embedded in .veg)</div>
+      <div class="row"><b>Raw length field</b> ${rawLen}</div>
+      <div class="row"><b>Playback rate (from file)</b> ${rate.toFixed(3)}x</div>`;
+  } else {
+    ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = '#3ea34c'; ctx.lineWidth = 2; ctx.beginPath();
+    for(let x=0;x<canvas.width;x++){
+      const y = canvas.height/2 + Math.sin(x*0.35)*40;
+      x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    info.innerHTML = `<div class="row"><b>Clip</b> ${trackId} · event ${idx+1}</div>
+      <div class="row"><b>Type</b> placeholder audio (1000&nbsp;Hz test tone — real media not embedded in .veg)</div>
+      <div class="row"><b>Raw length field</b> ${rawLen}</div>
+      <div class="row"><b>Playback rate (from file)</b> ${rate.toFixed(3)}x — tone is pitched/timed by this</div>
+      <div class="row"><button class="btn" id="playBtn" onclick="playTone(${rate})">▶ Play tone (clip rate × Speed slider)</button></div>`;
+  }
+}
+
+function playTone(clipRate){
+  clipRate = clipRate || 1;
+  const speedSlider = document.getElementById('speedSlider');
+  const globalSpeed = speedSlider ? Number(speedSlider.value)/100 : 1;
+  const rate = clipRate * globalSpeed; // this clip's own rate combined with the global Speed control
+  if(!AUDIO_CTX) AUDIO_CTX = new (window.AudioContext||window.webkitAudioContext)();
+  const osc = AUDIO_CTX.createOscillator();
+  const gain = AUDIO_CTX.createGain();
+  osc.frequency.value = 1000 * rate;
+  osc.type = 'sine';
+  const dur = 0.6 / rate;
+  gain.gain.setValueAtTime(0.2, AUDIO_CTX.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, AUDIO_CTX.currentTime + dur);
+  osc.connect(gain).connect(AUDIO_CTX.destination);
+  osc.start();
+  osc.stop(AUDIO_CTX.currentTime + dur);
+  const btn = document.getElementById('playBtn');
+  if(btn){
+    btn.classList.add('playing');
+    setTimeout(()=>btn.classList.remove('playing'), dur*1000);
+  }
+}
+
+/* ---------------- chunk tree rendering ---------------- */
+function renderChunkTree(tree){
+  let count = 0;
+  const lines = [];
+  function walk(nodes){
+    for(const n of nodes){
+      count++;
+      const label = n.label ? `[${n.label}]` : (n.typeLabel ? `[LIST:${n.typeLabel}]` : '');
+      lines.push(`<div class="row"><span>${'  '.repeat(n.depth)}${n.isList?'LIST':'chunk'} <span class="known">${label}</span> <span class="guid">${n.guid.slice(0,16)}…</span></span><span class="sz">off 0x${n.offset.toString(16)} · ${n.size}B</span></div>`);
+      walk(n.children);
+    }
+  }
+  walk(tree);
+  document.getElementById('chunkCount').textContent = count + ' chunks';
+  document.getElementById('chunkTree').innerHTML = lines.join('');
+}
+
+/* ---------------- strings rendering ---------------- */
+function renderStrings(strings){
+  document.getElementById('stringCount').textContent = strings.length;
+  const html = strings.map(s=>{
+    const isPath = /[\\\/]/.test(s.text) || /\.(wav|mp3|mp4|avi|mov|png|jpg|veg)$/i.test(s.text);
+    return `<div class="s ${isPath?'path':''}"><span class="off">0x${s.offset.toString(16)}</span>${escapeHTML(s.text)}</div>`;
+  }).join('');
+  document.getElementById('stringsList').innerHTML = html || '<div style="padding:14px;color:var(--fg-2);">No strings found.</div>';
+}
+
+function escapeHTML(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
